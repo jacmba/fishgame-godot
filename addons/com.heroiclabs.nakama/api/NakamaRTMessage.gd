@@ -1,4 +1,4 @@
-extends Reference
+extends RefCounted
 class_name NakamaRTMessage
 
 # Send a channel join message to the server.
@@ -169,7 +169,8 @@ class MatchJoin extends NakamaAsyncResult:
 	var token = null
 	var metadata = null
 
-	func _init(p_ex=null).(p_ex):
+	func _init(p_ex=null):
+		super(p_ex)
 		pass
 
 	func serialize() -> Dictionary:
@@ -241,7 +242,7 @@ class MatchmakerAdd extends NakamaAsyncResult:
 		"query": {"name": "query", "type": TYPE_STRING, "required": true},
 		"max_count": {"name": "max_count", "type": TYPE_INT, "required": true},
 		"min_count": {"name": "min_count", "type": TYPE_INT, "required": true},
-		"numeric_properties": {"name": "numeric_properties", "type": TYPE_DICTIONARY, "required": false, "content": TYPE_REAL},
+		"numeric_properties": {"name": "numeric_properties", "type": TYPE_DICTIONARY, "required": false, "content": TYPE_FLOAT},
 		"string_properties": {"name": "string_properties", "type": TYPE_DICTIONARY, "required": false, "content": TYPE_STRING},
 	}
 
@@ -302,10 +303,10 @@ class StatusFollow extends NakamaAsyncResult:
 		"usernames": {"name": "usernames", "type": TYPE_DICTIONARY, "required": false, "content": TYPE_STRING},
 	}
 
-	var user_ids := PoolStringArray()
-	var usernames := PoolStringArray()
+	var user_ids := PackedStringArray()
+	var usernames := PackedStringArray()
 
-	func _init(p_ids : PoolStringArray, p_usernames : PoolStringArray):
+	func _init(p_ids : PackedStringArray, p_usernames : PackedStringArray):
 		user_ids = p_ids
 		usernames = p_usernames
 
@@ -326,9 +327,9 @@ class StatusUnfollow extends NakamaAsyncResult:
 		"user_ids": {"name": "user_ids", "type": TYPE_DICTIONARY, "required": false, "content": TYPE_STRING},
 	}
 
-	var user_ids := PoolStringArray()
+	var user_ids := PackedStringArray()
 
-	func _init(p_ids : PoolStringArray):
+	func _init(p_ids : PackedStringArray):
 		user_ids = p_ids
 
 	func serialize():

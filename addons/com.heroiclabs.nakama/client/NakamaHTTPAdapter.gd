@@ -1,11 +1,11 @@
-tool
+@tool
 extends Node
 
 # An adapter which implements the HTTP protocol.
 class_name NakamaHTTPAdapter
 
 # The logger to use with the adapter.
-var logger : Reference = NakamaLogger.new()
+var logger : RefCounted = NakamaLogger.new()
 
 var _pending = {}
 var id : int = 0
@@ -17,7 +17,7 @@ var id : int = 0
 # @param body - Request content body to set.
 # @param timeoutSec - Request timeout.
 # Returns a task which resolves to the contents of the response.
-func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_body : PoolByteArray, p_timeout : int = 3):
+func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_body : PackedByteArray, p_timeout : int = 3):
 	var req = HTTPRequest.new()
 	if OS.get_name() != 'HTML5':
 		req.use_threads = true # Threads not available nor needed on the web.
@@ -32,7 +32,7 @@ func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_bod
 		method = HTTPClient.METHOD_DELETE
 	elif p_method == "HEAD":
 		method = HTTPClient.METHOD_HEAD
-	var headers = PoolStringArray()
+	var headers = PackedStringArray()
 
 	# Parse headers
 	headers.append("Accept: application/json")
@@ -41,7 +41,7 @@ func send_async(p_method : String, p_uri : String, p_headers : Dictionary, p_bod
 
 	# Handle timeout for 3.1 compatibility
 	id += 1
-	_pending[id] = [req, OS.get_ticks_msec() + (p_timeout * 1000)]
+	_pending[id] = [req, Time.get_ticks_msec() + (p_timeout * 1000)]
 
 	logger.debug("Sending request [ID: %d, Method: %s, Uri: %s, Headers: %s, Body: %s, Timeout: %d]" % [
 		id, p_method, p_uri, p_headers, p_body.get_string_from_utf8(), p_timeout
@@ -58,23 +58,23 @@ func _process(delta):
 		if p[0].is_queued_for_deletion():
 			_pending.erase(id)
 			continue
-		if p[1] < OS.get_ticks_msec():
+		if p[1] < Time.get_ticks_msec():
 			logger.debug("Request %d timed out" % id)
 			p[0].cancel_request()
 			_pending.erase(id)
-			p[0].emit_signal("request_completed", HTTPRequest.RESULT_REQUEST_FAILED, 0, PoolStringArray(), PoolByteArray())
+			p[0].emit_signal("request_completed", HTTPRequest.RESULT_REQUEST_FAILED, 0, PackedStringArray(), PackedByteArray())
 
-static func _send_async(request : HTTPRequest, p_uri : String, p_headers : PoolStringArray,
-		p_method : int, p_body : PoolByteArray, p_id : int, p_pending : Dictionary, logger : NakamaLogger):
+static func _send_async(request : HTTPRequest, p_uri : String, p_headers : PackedStringArray,
+		p_method : int, p_body : PackedByteArray, p_id : int, p_pending : Dictionary, logger : NakamaLogger):
 
 	var err = request.request(p_uri, p_headers, true, p_method, p_body.get_string_from_utf8())
 	if err != OK:
-		yield(request.get_tree(), "idle_frame")
+		await request.get_tree().idle_frame
 		logger.debug("Request %d failed to start, error: %d" % [p_id, err])
 		request.queue_free()
 		return NakamaException.new("Request failed")
 
-	var args = yield(request, "request_completed")
+	var args = await request.request_completed
 	var result = args[0]
 	var response_code = args[1]
 	var _headers = args[2]
@@ -91,7 +91,9 @@ static func _send_async(request : HTTPRequest, p_uri : String, p_headers : PoolS
 		])
 		return NakamaException.new("HTTPRequest failed!", result)
 
-	var json : JSONParseResult = JSON.parse(body.get_string_from_utf8())
+	var test_json_conv = JSON.new()
+	test_json_conv.parse(body.get_string_from_utf8())
+	var json : JSON = test_json_conv.get_data()
 	if json.error != OK:
 		logger.debug("Unable to parse request %d response. JSON error: %d, response code: %d" % [
 			p_id, json.error, response_code
@@ -107,7 +109,7 @@ static func _send_async(request : HTTPRequest, p_uri : String, p_headers : PoolS
 		else:
 			error = str(json.result)
 		if typeof(error) == TYPE_DICTIONARY:
-			error = JSON.print(error)
+			error = JSON.stringify(error)
 		logger.debug("Request %d returned response code: %d, RPC code: %d, error: %s" % [
 			p_id, response_code, code, error
 		])
